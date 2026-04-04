@@ -1,20 +1,16 @@
 # Use the official lightweight NGINX Alpine image
 FROM nginx:alpine
 
-# Install curl (needed to download local.it/ngrok)
-RUN apk add --no-cache curl
+# Install Node.js and the localtunnel client
+RUN apk add --no-cache nodejs npm && \
+    npm install -g localtunnel
 
-# Copy your static website files to the default NGINX directory
+# Copy your static website files
 COPY index.html /usr/share/nginx/html/
 
-# Expose port 80 to allow internal container networking
+# Expose port 80 for NGINX
 EXPOSE 80
 
-# --- ADDED FOR TUNNELING ---
-# Download and install local.it (or similar tool)
-# Example using a typical tunnel binary approach
-RUN curl -o /usr/local/bin/localit -s https://local.it/binary-url && \
-    chmod +x /usr/local/bin/localit
-
-# Start NGINX and the tunnel, keeping the container alive
-CMD ["/bin/sh", "-c", "nginx && localit -p 80 -s zakazaka40"]
+# Start NGINX in the background and then start localtunnel
+# localtunnel will request the specific subdomain 'zakazaka40'
+CMD nginx -g "daemon on;" && lt --port 80 --subdomain zakazaka40

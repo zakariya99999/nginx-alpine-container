@@ -1,0 +1,13 @@
+services:
+  web:
+    build: .
+    expose:
+      - 80
+
+  tunnel:
+    image: ngrok/ngrok:alpine
+    environment:
+      - NGROK_AUTHTOKEN=3AGp3hbqJOYQVk05EyzjcX8vepc_31CUzp1Vi2ZV8qx7gFzmY
+    command: http web:80
+    depends_on:
+      - web

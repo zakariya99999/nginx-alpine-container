@@ -1,30 +1,37 @@
-# Use OpenJDK 17 for modern BungeeCord compatibility
-FROM openjdk:17-slim
+# Use Eclipse Temurin as it is more stable than the old 'openjdk' image
+FROM eclipse-temurin:17-jre-alpine
 
+# Set the working directory
 WORKDIR /app
 
-# 1. Download the latest stable EaglerXBungee standalone JAR
-# We use a direct mirror to avoid GitHub/NPM build failures
-ADD https://github.com /app/proxy.jar
+# 1. Download EaglercraftXBungee (Direct download to avoid GitHub clone errors)
+# This is the stable 1.8.8 BungeeCord plugin/standalone jar
+ADD https://github.com /app/eaglerproxy.jar
 
-# 2. Create the configuration file directly
-# We set listeners to 8081 and enable the redirect query feature
-RUN echo 'server_name: "zakas java proxy"' > config.yml && \
-    echo 'listeners:' >> config.yml && \
-    echo '  - port: 8081' >> config.yml && \
-    echo '    host: 0.0.0.0' >> config.yml && \
-    echo '    motd: "&4zakas java proxy"' >> config.yml && \
-    echo '    max_players: 64' >> config.yml && \
-    echo '    force_default_server: false' >> config.yml && \
-    echo 'auth_system:' >> config.yml && \
-    echo '  enabled: false' >> config.yml && \
-    echo 'enable_query_redirect: true' >> config.yml && \
-    echo 'origins: []' >> config.yml
+# 2. Create the configuration files directly in the Dockerfile
+RUN mkdir -p /app/plugins/EaglercraftXBungee
 
-# 3. Fix permissions for Back4App's non-root environment
-RUN chmod 777 /app/proxy.jar && chmod 666 /app/config.yml
+# Create the listener config with port 8081 and Red MOTD
+RUN echo "listeners:" > /app/plugins/EaglercraftXBungee/listeners.yml && \
+    echo "  - address: 0.0.0.0" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
+    echo "    port: 8081" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
+    echo "    motd: '&czakas java proxy'" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
+    echo "    # This enables the ?ip= &port= feature you requested" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
+    echo "    allow_custom_ips: true" >> /app/plugins/EaglercraftXBungee/listeners.yml
 
+# Create basic Bungee config
+RUN echo "stats: $(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 32 | head -n 1)" > /app/config.yml && \
+    echo "groups: {}" >> /app/config.yml && \
+    echo "servers:" >> /app/config.yml && \
+    echo "  default: {address: localhost:25565, motd: 'Default Server', restricted: false}" >> /app/config.yml && \
+    echo "listeners:" >> /app/config.yml && \
+    echo "- query_port: 25577" >> /app/config.yml && \
+    echo "  host: 0.0.0.0:25577" >> /app/config.yml && \
+    echo "  priorities: [default]" >> /app/config.yml && \
+    echo "online_mode: false" >> /app/config.yml
+
+# Back4app uses port 8081 per your request
 EXPOSE 8081
 
-# Run the proxy with enough memory for a container
-CMD ["java", "-Xmx113M", "-Xms128M", "-jar", "proxy.jar"]
+# Start the proxy
+CMD ["java", "-Xmx512M", "-Xms512M", "-jar", "eaglerproxy.jar"]

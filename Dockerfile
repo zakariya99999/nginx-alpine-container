@@ -1,16 +1,22 @@
-# Use the official lightweight NGINX Alpine image
-FROM nginx:alpine
+# Use node alpine for small image size
+FROM node:18-alpine
 
-# Install Node.js and the localtunnel client
-RUN apk add --no-cache nodejs npm && \
-    npm install -g localtunnel
+# Install git to clone the proxy
+RUN apk add --no-cache git
 
-# Copy your static website files
-COPY index.html /usr/share/nginx/html/
+# Clone the specific repository
+RUN git clone https://github.com/Eaglercraft-Archive/eaglerproxy.git /eaglerproxy
 
-# Expose port 80 for NGINX
-EXPOSE 80
+WORKDIR /eaglerproxy
 
-# Start NGINX in the background and then start localtunnel
-# localtunnel will request the specific subdomain 'zakazaka40'
-CMD nginx -g "daemon on;" && lt --port 80 --subdomain zakazaka40
+# Install dependencies
+RUN npm install
+
+# Create config from example
+RUN cp config.example.ts config.ts
+
+# Expose the default WebSocket port
+EXPOSE 8080
+
+# Command to run the proxy
+CMD ["node", "index.js"]

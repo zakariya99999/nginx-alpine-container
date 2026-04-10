@@ -1,31 +1,30 @@
-# Use a Node.js base image
+# Use official Node.js Alpine image
 FROM node:18-alpine
 
-# Install necessary tools (Git is required for cloning the proxy)
-RUN apk add --no-cache git
-
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Clone the EaglerProxy repository directly
-# This avoids the "repository not found" error by targeting the specific project
-RUN git clone https://github.com .
+# Initialize npm and install EaglerProxy directly via NPM to avoid Git
+RUN npm init -y && \
+    npm install eaglerproxy
 
-# Install dependencies and build the TypeScript project
-RUN npm install && npm run build
+# Create the configuration file (listener.yml)
+# This enables the 'redirect' feature for dynamic IP/Port/Auth joining
+RUN echo 'bind_host: 0.0.0.0' > listener.yml && \
+    echo 'bind_port: 8080' >> listener.yml && \
+    echo 'max_connections: 256' >> listener.yml && \
+    echo 'motd: "§czakas java proxy"' >> listener.yml && \
+    echo 'server:' >> listener.yml && \
+    echo '  host: 127.0.0.1' >> listener.yml && \
+    echo '  port: 25565' >> listener.yml && \
+    echo 'auth_type: offline' >> listener.yml && \
+    echo '# Enable URL parameter redirection' >> listener.yml && \
+    echo 'redirect:' >> listener.yml && \
+    echo '  enabled: true' >> listener.yml && \
+    echo '  allow_custom_ip: true' >> listener.yml
 
-# Create a custom config.yml with your requested MOTD and dynamic settings
-RUN echo "bind_host: 0.0.0.0" > config.yml && \
-    echo "bind_port: 8080" >> config.yml && \
-    echo "motd:" >> config.yml && \
-    echo "  icon: false" >> config.yml && \
-    echo "  line_1: '&czakas java proxy'" >> config.yml && \
-    echo "  line_2: 'Join via URL parameters!'" >> config.yml && \
-    echo "plugins:" >> config.yml && \
-    echo "  - EagProxyAAS" >> config.yml
-
-# Expose the port Back4app will use (Standard is 8080)
+# Expose the port Back4app uses
 EXPOSE 8080
 
-# Start the proxy
-CMD ["node", "build/index.js"]
+# Start the proxy using the installed node module
+CMD ["npx", "eaglerproxy"]

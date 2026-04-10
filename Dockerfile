@@ -1,32 +1,34 @@
-# STAGE 1: Build the Proxy
-FROM maven:3.9-eclipse-temurin-17 AS builder
+# Use Node.js LTS 
+FROM node:18-alpine
 
-# Download the source directly from a mirror/source to avoid git clone issues
-WORKDIR /build
-RUN curl -L https://github.com | tar -xz --strip-components=1
-RUN mvn clean package -DskipTests
-
-# STAGE 2: Runtime
-FROM eclipse-temurin:17-jre-alpine
-
+# Set working directory
 WORKDIR /app
 
-# Copy the built jar from the builder stage
-COPY --from=builder /build/target/eaglercraft-1.8-proxy-*.jar ./proxy.jar
+# 1. Install dependencies required for downloading/extracting
+RUN apk add --no-cache curl tar
 
-# Create the startup script to handle dynamic URL parameters
-RUN echo '#!/bin/sh' > entrypoint.sh && \
-    echo 'cat <<EOF > config.yml' >> entrypoint.sh && \
-    echo 'bind_address: 0.0.0.0' >> entrypoint.sh && \
-    echo 'bind_port: 8080' >> entrypoint.sh && \
-    echo 'motd: "§czakas java proxy"' >> entrypoint.sh && \
-    echo '# Logic to allow dynamic connecting via URL params' >> entrypoint.sh && \
-    echo 'allow_command_line_params: true' >> entrypoint.sh && \
-    echo 'EOF' >> entrypoint.sh && \
-    echo 'exec java -Xmx512M -jar proxy.jar' >> entrypoint.sh && \
-    chmod +x entrypoint.sh
+# 2. Download the latest Eaglerproxy source directly (Avoiding Git Clone)
+# We use the official source tarball to bypass registry/git issues
+RUN curl -L https://github.com | tar -xz --strip-components=1
 
-# Back4App typically uses port 8080
+# 3. Install NPM dependencies from the included package.json
+RUN npm install --production
+
+# 4. Create the listener configuration
+# This enables the dynamic "query parameter" mode for IP/Port/Auth
+RUN echo '{\
+  "address": "0.0.0.0",\
+  "port": 8080,\
+  "motd": "§czakas java proxy",\
+  "allow_dynamic_ports": true,\
+  "max_connections": 100,\
+  "logging": true\
+}' > config.json
+
+# 5. Create a small entrypoint script to ensure it runs correctly on Back4App
+RUN echo '#!/bin/sh\nnode index.js' > entrypoint.sh && chmod +x entrypoint.sh
+
+# Back4App usually uses port 8080 or the PORT env variable
 EXPOSE 8080
 
-ENTRYPOINT ["./entrypoint.sh"]
+CMD ["./entrypoint.sh"]

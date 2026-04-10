@@ -1,22 +1,28 @@
-# Use node alpine for small image size
+# Use a Node.js base image
 FROM node:18-alpine
 
-# Install git to clone the proxy
+# Install git to clone the repository
 RUN apk add --no-cache git
 
-# Clone the specific repository
-RUN git clone https://github.com/Eaglercraft-Archive/eaglerproxy.git /eaglerproxy
+# Clone the EagProxyAAS repository (the specific version for dynamic parameters)
+RUN git clone https://github.com /app
+WORKDIR /app
 
-WORKDIR /eaglerproxy
-
-# Install dependencies
+# Install dependencies and TypeScript
 RUN npm install
+RUN npm install -g typescript
 
-# Create config from example
-RUN cp config.example.ts config.ts
+# Configure the MOTD to "zakas java proxy" in red
+# Minecraft color code §4 (dark red) or §c (bright red)
+# We use sed to modify the MOTD in the config.ts file
+RUN sed -i 's/motd: ".*"/motd: "§czakas java proxy"/' src/config.ts
 
-# Expose the default WebSocket port
+# Compile the TypeScript code
+RUN tsc
+
+# Back4App containers typically use port 8080 or the PORT environment variable
+# EaglerProxy defaults to 8080 in many AAS configurations
 EXPOSE 8080
 
-# Command to run the proxy
-CMD ["node", "index.js"]
+# Start the proxy
+CMD ["node", "build/index.js"]

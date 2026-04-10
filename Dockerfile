@@ -1,26 +1,24 @@
-# Use Eclipse Temurin as it is more reliable than the deprecated openjdk:17-slim
+# Use a standard Java 17 image
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# Install wget to fetch the jar
-RUN apk add --no-cache wget
-
-# Download EaglerXBungee JAR directly (Latest stable 1.3 release)
-RUN wget -O EaglerXBungee.jar "https://github.com"
-
-# Create the config.yml file with your specific requirements
-# &c is the Minecraft color code for Red
-RUN echo "bind: 0.0.0.0:8081" > config.yml && \
-    echo "forward_ip: true" >> config.yml && \
-    echo "motd: '&czakas java proxy'" >> config.yml && \
-    echo "max_players: 64" >> config.yml && \
-    echo "allow_query_string: true" >> config.yml && \
-    echo "default_server: 'example.com:25565'" >> config.yml && \
-    echo "auth_type: 'OFFLINE'" >> config.yml
-
-# Back4App requires the port to be exposed
+# Expose the proxy port
 EXPOSE 8081
 
-# Command to run the proxy
-CMD ["java", "-Xmx512M", "-Xms512M", "-jar", "EaglerXBungee.jar"]
+# Download EaglerProxy (EagPAAS) JAR directly
+# Note: Ensure this URL points to a direct download of the EaglerProxy.jar
+ADD https://github.com /app/EaglerProxy.jar
+
+# Create the configuration file with your red MOTD
+# Use \u00A74 for dark red color in Minecraft/Eaglercraft
+RUN echo '{ \
+  "port": 8081, \
+  "motd": "\u00A74zakas java proxy", \
+  "allow_url_parameters": true, \
+  "default_ip": "127.0.0.1", \
+  "default_port": 25565 \
+}' > /app/config.json
+
+# Run the proxy
+CMD ["java", "-jar", "EaglerProxy.jar"]

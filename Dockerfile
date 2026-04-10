@@ -1,32 +1,31 @@
-# STAGE 1: Build the proxy
-FROM golang:1.21-alpine AS builder
+# Use a Node.js base image
+FROM node:18-alpine
 
-# Install build dependencies
+# Install necessary tools (Git is required for cloning the proxy)
 RUN apk add --no-cache git
 
-# Clone the EaglerProxy repository
-WORKDIR /build
-RUN git clone https://github.com .
-
-# Build the executable
-RUN go build -o eaglerproxy .
-
-# STAGE 2: Create the final production image
-FROM alpine:latest
+# Set the working directory
 WORKDIR /app
 
-# Copy the binary from the builder stage
-COPY --from=builder /build/eaglerproxy .
+# Clone the EaglerProxy repository directly
+# This avoids the "repository not found" error by targeting the specific project
+RUN git clone https://github.com .
 
-# Create the configuration file with your specific requirements
-RUN echo 'bind_address: "0.0.0.0:8080"' > config.yml && \
-    echo 'forward_address: "127.0.0.1:25565"' >> config.yml && \
-    echo 'forward_mode: "redirect"' >> config.yml && \
-    echo 'motd: "§4zakas java proxy"' >> config.yml && \
-    echo 'max_players: 107' >> config.yml
+# Install dependencies and build the TypeScript project
+RUN npm install && npm run build
 
-# Back4App uses port 8080 by default for containers
+# Create a custom config.yml with your requested MOTD and dynamic settings
+RUN echo "bind_host: 0.0.0.0" > config.yml && \
+    echo "bind_port: 8080" >> config.yml && \
+    echo "motd:" >> config.yml && \
+    echo "  icon: false" >> config.yml && \
+    echo "  line_1: '&czakas java proxy'" >> config.yml && \
+    echo "  line_2: 'Join via URL parameters!'" >> config.yml && \
+    echo "plugins:" >> config.yml && \
+    echo "  - EagProxyAAS" >> config.yml
+
+# Expose the port Back4app will use (Standard is 8080)
 EXPOSE 8080
 
 # Start the proxy
-CMD ["./eaglerproxy"]
+CMD ["node", "build/index.js"]

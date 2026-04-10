@@ -1,38 +1,27 @@
-# Use a stable Node.js image
-FROM node:20-alpine
-
-# Set working directory
+# 1. Build Phase - Utilizing JDK for compilation
+FROM eclipse-temurin:17-jdk-alpine AS builder
 WORKDIR /app
 
-# 1. Create package.json to manage dependencies
-RUN echo '{"name":"eaglerproxy","version":"1.0.0","dependencies":{"eaglerproxy":"latest"}}' > package.json
+# Clone specific reliable fork directly
+RUN apk add --no-cache git && \
+    git clone --depth 1 https://github.com/LAX1DUDE/eaglercraft-1.8-bungeecord-proxy.git .
 
-# 2. Fix the "moduleResolution" error by creating a tsconfig.json with the ignore flag
-RUN echo '{"compilerOptions": {"ignoreDeprecations": "6.0", "moduleResolution": "node10"}}' > tsconfig.json
+# Build the proxy using Maven
+RUN ./mvnw clean package
 
-# 3. Install dependencies (using the specific library instead of the broken git/npm routes)
-RUN npm install @eaglercraft/eaglerproxy
+# 2. Production Phase
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
 
-# 4. Create the configuration file (config.yml) with your MOTD
-RUN echo 'server:' > config.yml && \
-    echo '  host: 0.0.0.0' >> config.yml && \
-    echo '  port: 8080' >> config.yml && \
-    echo '  motd: "§4zakas java proxy"' >> config.yml && \
-    echo '  max-players: 20' >> config.yml && \
-    echo 'security:' >> config.yml && \
-    echo '  allow-dynamic-ports: true' >> config.yml
+# Copy built JAR
+COPY --from=builder /app/target/eaglercraft-proxy-*.jar app.jar
 
-# 5. Create a small entry script to handle the dynamic URL parameters
-# This allows: ws://your-app.back4app.io/?ip=server.com&port=25565
-RUN echo 'const { EaglerProxy } = require("@eaglercraft/eaglerproxy");' > index.js && \
-    echo 'const proxy = new EaglerProxy({' >> index.js && \
-    echo '  configPath: "./config.yml",' >> index.js && \
-    echo '  allowDynamic: true' >> index.js && \
-    echo '});' >> index.js && \
-    echo 'proxy.start();' >> index.js
+# Create config files with "zakas java proxy" in red
+RUN mkdir -p /app/config && \
+    echo '{"motd": "§cZakas Java Proxy", "maxPlayers": 100}' > /app/config/config.json
 
-# Back4App uses port 8080 by default for containers
+# Expose proxy port
 EXPOSE 8080
 
-# Start the proxy
-CMD ["node", "index.js"]
+# Run with dynamic IP/Port support (appends query params)
+ENTRYPOINT ["java", "-jar", "app.jar"]

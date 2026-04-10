@@ -1,28 +1,32 @@
-# Use a Node.js base image
-FROM node:18-alpine
+# STAGE 1: Build the proxy
+FROM golang:1.21-alpine AS builder
 
-# Install git to clone the repository
+# Install build dependencies
 RUN apk add --no-cache git
 
-# Clone the EagProxyAAS repository (the specific version for dynamic parameters)
-RUN git clone https://github.com /app
+# Clone the EaglerProxy repository
+WORKDIR /build
+RUN git clone https://github.com .
+
+# Build the executable
+RUN go build -o eaglerproxy .
+
+# STAGE 2: Create the final production image
+FROM alpine:latest
 WORKDIR /app
 
-# Install dependencies and TypeScript
-RUN npm install
-RUN npm install -g typescript
+# Copy the binary from the builder stage
+COPY --from=builder /build/eaglerproxy .
 
-# Configure the MOTD to "zakas java proxy" in red
-# Minecraft color code §4 (dark red) or §c (bright red)
-# We use sed to modify the MOTD in the config.ts file
-RUN sed -i 's/motd: ".*"/motd: "§czakas java proxy"/' src/config.ts
+# Create the configuration file with your specific requirements
+RUN echo 'bind_address: "0.0.0.0:8080"' > config.yml && \
+    echo 'forward_address: "127.0.0.1:25565"' >> config.yml && \
+    echo 'forward_mode: "redirect"' >> config.yml && \
+    echo 'motd: "§4zakas java proxy"' >> config.yml && \
+    echo 'max_players: 107' >> config.yml
 
-# Compile the TypeScript code
-RUN tsc
-
-# Back4App containers typically use port 8080 or the PORT environment variable
-# EaglerProxy defaults to 8080 in many AAS configurations
+# Back4App uses port 8080 by default for containers
 EXPOSE 8080
 
 # Start the proxy
-CMD ["node", "build/index.js"]
+CMD ["./eaglerproxy"]

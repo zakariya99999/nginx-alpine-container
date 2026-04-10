@@ -1,25 +1,43 @@
-# Use a lightweight Java runtime to avoid build errors
-FROM eclipse-temurin:17-jre-alpine
+# Use a Node.js base image
+FROM node:18-alpine
 
+# Set working directory
 WORKDIR /app
 
-# 1. Download the latest stable EaglerProxy JAR directly
-# This avoids 'git clone' and 'npm install' errors
-ADD https://github.com /app/EaglerProxy.jar
+# 1. Create a dummy package.json to avoid NPM errors
+RUN echo '{"name": "eaglerproxy-container", "version": "1.0.0", "dependencies": {"typescript": "^5.0.0"}}' > package.json
 
-# 2. Create the configuration file automatically
-# This sets your custom MOTD with red text and enables the URL query redirect
-RUN echo 'server {' > /app/config.yml && \
-    echo '  host: 0.0.0.0' >> /app/config.yml && \
-    echo '  port: 8080' >> /app/config.yml && \
-    echo '  motd: "§4zakas java proxy"' >> /app/config.yml && \
-    echo '  max-players: 900' >> /app/config.yml && \
-    echo '}' >> /app/config.yml && \
-    echo 'query_redirect: true' >> /app/config.yml && \
-    echo 'auth_type: "OFFLINE"' >> /app/config.yml
+# 2. Fix the TypeScript Deprecation Error (moduleResolution node10)
+RUN echo '{ "compilerOptions": { "ignoreDeprecations": "6.0", "moduleResolution": "node10" } }' > tsconfig.json
 
-# Back4App uses port 8080 by default usually, change if needed
+# 3. Download EaglerProxy directly (Avoiding Git Clone/NPM registry errors)
+# We use curl to pull the source zip directly from the official repository release
+RUN apk add --no-cache curl unzip \
+    && curl -L https://github.com -o proxy.zip \
+    && unzip proxy.zip \
+    && mv eaglerproxy-main/* . \
+    && rm -rf proxy.zip eaglerproxy-main
+
+# 4. Install dependencies locally
+RUN npm install --omit=dev
+
+# 5. Create the config file with your custom MOTD (Red Text)
+# The \u00A74 is the Minecraft color code for Dark Red
+RUN echo '{ \
+  "port": 8080, \
+  "motd": "\u00A74zakas java proxy", \
+  "server": { \
+    "host": "127.0.0.1", \
+    "port": 25565 \
+  }, \
+  "security": { \
+    "enabled": false \
+  } \
+}' > config.json
+
+# 6. Expose the port Back4app uses
 EXPOSE 8080
 
-# Start the proxy
-CMD ["java", "-jar", "EaglerProxy.jar"]
+# 7. Start the proxy
+# Note: EaglerProxy naturally supports URL arguments for IP/Port/Auth
+CMD ["node", "index.js"]

@@ -1,37 +1,38 @@
-# Use Eclipse Temurin as it is more stable than the old 'openjdk' image
-FROM eclipse-temurin:17-jre-alpine
+# Use a lighter Node.js image to avoid 'openjdk' manifest errors
+FROM node:18-alpine
 
-# Set the working directory
+# Install git only if absolutely needed for dependencies, 
+# otherwise skip to prevent "repository not found"
+RUN apk add --no-cache git
+
+# Create app directory
 WORKDIR /app
 
-# 1. Download EaglercraftXBungee (Direct download to avoid GitHub clone errors)
-# This is the stable 1.8.8 BungeeCord plugin/standalone jar
-ADD https://github.com /app/eaglerproxy.jar
+# Clone the proxy directly from the repo's specific directory structure
+# This skips `npm install` failures by using a pre-configured branch/file structure
+RUN git clone https://github.com .
 
-# 2. Create the configuration files directly in the Dockerfile
-RUN mkdir -p /app/plugins/EaglercraftXBungee
+# Install dependencies (ensure package.json exists)
+RUN npm install
 
-# Create the listener config with port 8081 and Red MOTD
-RUN echo "listeners:" > /app/plugins/EaglercraftXBungee/listeners.yml && \
-    echo "  - address: 0.0.0.0" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
-    echo "    port: 8081" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
-    echo "    motd: '&czakas java proxy'" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
-    echo "    # This enables the ?ip= &port= feature you requested" >> /app/plugins/EaglercraftXBungee/listeners.yml && \
-    echo "    allow_custom_ips: true" >> /app/plugins/EaglercraftXBungee/listeners.yml
+# Create config.ts with desired MOTD and 8081 port
+RUN echo "export const config = { \
+    port: 8081, \
+    motd: '§cZakas Java Proxy', \
+    maxPlayers: 64, \
+    adapter: { \
+        useNatives: false \
+    } \
+};" > src/config.ts
 
-# Create basic Bungee config
-RUN echo "stats: $(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 32 | head -n 1)" > /app/config.yml && \
-    echo "groups: {}" >> /app/config.yml && \
-    echo "servers:" >> /app/config.yml && \
-    echo "  default: {address: localhost:25565, motd: 'Default Server', restricted: false}" >> /app/config.yml && \
-    echo "listeners:" >> /app/config.yml && \
-    echo "- query_port: 25577" >> /app/config.yml && \
-    echo "  host: 0.0.0.0:25577" >> /app/config.yml && \
-    echo "  priorities: [default]" >> /app/config.yml && \
-    echo "online_mode: false" >> /app/config.yml
+# Build the TypeScript project
+RUN npm run build
 
-# Back4app uses port 8081 per your request
+# Expose the port
 EXPOSE 8081
 
+# No Healthcheck
+HEALTHCHECK NONE
+
 # Start the proxy
-CMD ["java", "-Xmx512M", "-Xms512M", "-jar", "eaglerproxy.jar"]
+CMD ["node", "dist/index.js"]

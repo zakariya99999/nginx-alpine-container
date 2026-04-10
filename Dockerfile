@@ -1,30 +1,32 @@
-# Use official Node.js Alpine image
-FROM node:18-alpine
+# STAGE 1: Build the Proxy
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
-# Set working directory
+# Download the source directly from a mirror/source to avoid git clone issues
+WORKDIR /build
+RUN curl -L https://github.com | tar -xz --strip-components=1
+RUN mvn clean package -DskipTests
+
+# STAGE 2: Runtime
+FROM eclipse-temurin:17-jre-alpine
+
 WORKDIR /app
 
-# Initialize npm and install EaglerProxy directly via NPM to avoid Git
-RUN npm init -y && \
-    npm install eaglerproxy
+# Copy the built jar from the builder stage
+COPY --from=builder /build/target/eaglercraft-1.8-proxy-*.jar ./proxy.jar
 
-# Create the configuration file (listener.yml)
-# This enables the 'redirect' feature for dynamic IP/Port/Auth joining
-RUN echo 'bind_host: 0.0.0.0' > listener.yml && \
-    echo 'bind_port: 8080' >> listener.yml && \
-    echo 'max_connections: 256' >> listener.yml && \
-    echo 'motd: "§czakas java proxy"' >> listener.yml && \
-    echo 'server:' >> listener.yml && \
-    echo '  host: 127.0.0.1' >> listener.yml && \
-    echo '  port: 25565' >> listener.yml && \
-    echo 'auth_type: offline' >> listener.yml && \
-    echo '# Enable URL parameter redirection' >> listener.yml && \
-    echo 'redirect:' >> listener.yml && \
-    echo '  enabled: true' >> listener.yml && \
-    echo '  allow_custom_ip: true' >> listener.yml
+# Create the startup script to handle dynamic URL parameters
+RUN echo '#!/bin/sh' > entrypoint.sh && \
+    echo 'cat <<EOF > config.yml' >> entrypoint.sh && \
+    echo 'bind_address: 0.0.0.0' >> entrypoint.sh && \
+    echo 'bind_port: 8080' >> entrypoint.sh && \
+    echo 'motd: "§czakas java proxy"' >> entrypoint.sh && \
+    echo '# Logic to allow dynamic connecting via URL params' >> entrypoint.sh && \
+    echo 'allow_command_line_params: true' >> entrypoint.sh && \
+    echo 'EOF' >> entrypoint.sh && \
+    echo 'exec java -Xmx512M -jar proxy.jar' >> entrypoint.sh && \
+    chmod +x entrypoint.sh
 
-# Expose the port Back4app uses
+# Back4App typically uses port 8080
 EXPOSE 8080
 
-# Start the proxy using the installed node module
-CMD ["npx", "eaglerproxy"]
+ENTRYPOINT ["./entrypoint.sh"]

@@ -1,48 +1,25 @@
-# STAGE 1: Build the proxy from source
-FROM node:18-alpine AS builder
+# Use a lightweight Java runtime to avoid build errors
+FROM eclipse-temurin:17-jre-alpine
 
-# Install build dependencies
-RUN apk add --no-progress --no-cache python3 make g++
-
-# Create app directory
 WORKDIR /app
 
-# Download the EaglerProxy source directly via curl (avoids git clone issues)
-# We use the official master zip to ensure we have the source code
-ADD https://github.com /tmp/proxy.tar.gz
-RUN tar -xzf /tmp/proxy.tar.gz --strip-components=1 && rm /tmp/proxy.tar.gz
+# 1. Download the latest stable EaglerProxy JAR directly
+# This avoids 'git clone' and 'npm install' errors
+ADD https://github.com /app/EaglerProxy.jar
 
-# FIX: moduleResolution=node10 deprecation error
-# We inject "ignoreDeprecations": "6.0" into the tsconfig.json
-RUN sed -i 's/"compilerOptions": {/"compilerOptions": { "ignoreDeprecations": "6.0",/g' tsconfig.json
+# 2. Create the configuration file automatically
+# This sets your custom MOTD with red text and enables the URL query redirect
+RUN echo 'server {' > /app/config.yml && \
+    echo '  host: 0.0.0.0' >> /app/config.yml && \
+    echo '  port: 8080' >> /app/config.yml && \
+    echo '  motd: "§4zakas java proxy"' >> /app/config.yml && \
+    echo '  max-players: 900' >> /app/config.yml && \
+    echo '}' >> /app/config.yml && \
+    echo 'query_redirect: true' >> /app/config.yml && \
+    echo 'auth_type: "OFFLINE"' >> /app/config.yml
 
-# Install dependencies and build
-RUN npm install
-RUN npm run build
-
-# STAGE 2: Run the proxy
-FROM node:18-alpine
-WORKDIR /app
-
-# Copy built files and production dependencies
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-
-# Create the Config File with your specific MOTD and settings
-RUN echo "server:" > config.yml && \
-    echo "  host: 0.0.0.0" >> config.yml && \
-    echo "  port: 8080" >> config.yml && \
-    echo "  motd: '§czakas java proxy'" >> config.yml && \
-    echo "  max-players: 2700" >> config.yml && \
-    echo "security:" >> config.yml && \
-    echo "  enabled: false" >> config.yml && \
-    echo "query-auth:" >> config.yml && \
-    echo "  enabled: true" >> config.yml && \
-    echo "  allow-custom-ip: true" >> config.yml
-
-# Expose the Back4App port
+# Back4App uses port 8080 by default usually, change if needed
 EXPOSE 8080
 
 # Start the proxy
-CMD ["node", "dist/index.js"]
+CMD ["java", "-jar", "EaglerProxy.jar"]

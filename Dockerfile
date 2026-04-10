@@ -4,22 +4,25 @@ FROM eclipse-temurin:17-jre-alpine
 # Set working directory
 WORKDIR /app
 
-# Download the standalone EaglerProxy JAR directly
-# We use a direct download to avoid GitHub/NPM registry issues on Back4app
-ADD https://github.com proxy.jar
+# Install wget to download the proxy jar
+RUN apk add --no-cache wget
 
-# Create the configuration file automatically to avoid external file dependencies
-RUN echo "address: 0.0.0.0" > config.yml && \
-    echo "port: 8080" >> config.yml && \
-    echo "motd: \"§4zakas java proxy\"" >> config.yml && \
-    echo "server_name: \"EaglerProxy\"" >> config.yml && \
-    echo "max_players: 7293" >> config.yml && \
-    echo "allow_custom_ips: true" >> config.yml && \
-    echo "# Redirect all root traffic to use URL params" >> config.yml
+# Download the latest EaglerProxy stable jar directly 
+# This avoids the "git clone" and "npm install" errors you were seeing
+RUN wget -O EaglerProxy.jar https://github.com
 
-# Back4app usually uses port 8080 or provides one via environment variable
+# Create the configuration file automatically
+# This sets the MOTD with red text code (§c) and enables the redirect feature
+RUN echo 'server-ip: 0.0.0.0' > config.yml && \
+    echo 'server-port: 8080' >> config.yml && \
+    echo 'motd: "§czakas java proxy"' >> config.yml && \
+    echo 'max-players: 100' >> config.yml && \
+    echo '# Enable URL parameter redirection (ws://.../?ip=...)' >> config.yml && \
+    echo 'allow-redirect: true' >> config.yml && \
+    echo 'auth-type: ONLINE' >> config.yml
+
+# Back4App usually uses port 8080
 EXPOSE 8080
 
 # Start the proxy
-# The -Xmx256M flag keeps it within small container limits
-CMD ["java", "-Xmx128M", "-Xms128M", "-jar", "proxy.jar"]
+CMD ["java", "-jar", "EaglerProxy.jar"]

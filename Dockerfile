@@ -1,37 +1,23 @@
-# Use a specific Node version to avoid "manifest unknown" and TS version issues
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Install dependencies needed for some native builds
-RUN apk add --no-cache python3 make g++
+# 1. Install build tools
+RUN apk add --no-cache git python3 make g++
 
-# Initialize a clean npm project and install the proxy
-# We use the direct github link to avoid the 404 npm registry error
-RUN npm init -y && \
-    npm install https://github.com
+# 2. Clone the repo
+RUN git clone https://github.com .
 
-# Create the configuration file automatically
-# This sets the MOTD, port 8081, and allows the dynamic URL params you requested
-RUN cat <<EOF > config.json
-{
-  "serverName": "zakas java proxy",
-  "motd": "§czakas java proxy",
-  "port": 8081,
-  "host": "0.0.0.0",
-  "maxPlayers": 20,
-  "origins": [],
-  "forwardIP": true,
-  "auth": {
-    "enabled": false
-  }
-}
-EOF
+# 3. Install production dependencies and TypeScript
+RUN npm install --production && npm install -g typescript
 
-# Expose the port Back4App is looking for
+# 4. Force port 8081 and compile
+RUN sed -i 's/port: [0-9]*/port: 8081/g' src/config.ts && npx tsc
+
+# 5. Clean up build tools to free RAM for the app
+RUN apk del git python3 make g++ && rm -rf /root/.npm
+
 EXPOSE 8081
 
-# Start the proxy
-# The proxy by default supports the ?ip= &port= URL parameters
-CMD ["npx", "eaglercraft-proxy", "--config", "config.json"]
+# 6. Run with a strict memory limit for 256MB environment
+CMD ["node", "--max-old-space-size=192", "dist/index.js"]
